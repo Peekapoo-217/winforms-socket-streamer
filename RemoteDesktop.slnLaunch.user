@@ -9,6 +9,10 @@
       {
         "Path": "SharpView.Client\\SharpView.Client.csproj",
         "Action": "Start"
+      },
+      {
+        "Path": "SharpView.Relay\\SharpView.Relay.csproj",
+        "Action": "Start"
       }
     ]
   }

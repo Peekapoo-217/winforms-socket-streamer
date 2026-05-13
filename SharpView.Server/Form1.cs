@@ -14,7 +14,7 @@ public partial class Form1 : Form
     private ScreenCapturer? _capturer;
     private CancellationTokenSource? _streamCts;
     private bool _isStreaming;
-    private const int StreamIntervalMs = 80;
+    private int _streamIntervalMs = 80;
     private const int JpegQuality = 50;
 
     // ─── Partner ID + Password ───
@@ -148,7 +148,7 @@ public partial class Form1 : Form
         _isStreaming = true;
         btnToggleStream.Text = "⏹ Stop";
         btnToggleStream.BackColor = Color.FromArgb(178, 34, 34);
-        AppendLog($"Streaming started ({StreamIntervalMs}ms, q={JpegQuality}).", Color.DeepSkyBlue);
+        AppendLog($"Streaming started ({_streamIntervalMs}ms, q={JpegQuality}).", Color.DeepSkyBlue);
         _ = StreamLoopAsync(_streamCts.Token);
     }
 
@@ -189,7 +189,7 @@ public partial class Form1 : Form
                     frameCount = 0; fpsTimer.Restart();
                     SafeInvoke(() => lblFps.Text = $"{fps} FPS | ~{kb} KB/f");
                 }
-                var delay = StreamIntervalMs - (int)sw.ElapsedMilliseconds;
+                var delay = _streamIntervalMs - (int)sw.ElapsedMilliseconds;
                 if (delay > 0) await Task.Delay(delay, ct).ConfigureAwait(false);
             }
         }
@@ -275,6 +275,16 @@ public partial class Form1 : Form
 
             default:
                 SafeInvoke(() => AppendLog($"[?] Type={p.Type}", Color.Gray));
+                break;
+
+            // ─── Dynamic Quality Scaling ───
+
+            case DataType.QualityCommand:
+                if (!_isPaired) return;
+                var qPacket = QualityPacket.FromBytes(p.Payload);
+                _streamIntervalMs = qPacket.StreamIntervalMs;
+                _capturer?.UpdateQuality(qPacket.JpegQuality);
+                SafeInvoke(() => AppendLog($"[📊] Quality adjusted: JPEG={qPacket.JpegQuality}%, Interval={qPacket.StreamIntervalMs}ms", Color.FromArgb(100, 200, 255)));
                 break;
         }
     }

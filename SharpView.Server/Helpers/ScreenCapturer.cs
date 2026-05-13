@@ -8,7 +8,7 @@ namespace SharpView.Server.Helpers;
 /// </summary>
 public sealed class ScreenCapturer
 {
-    private readonly int _jpegQuality;
+    private int _jpegQuality;
     private readonly ImageCodecInfo _jpegCodec;
     private readonly EncoderParameters _encoderParams;
 
@@ -32,6 +32,18 @@ public sealed class ScreenCapturer
         // Build encoder parameters once and reuse.
         _encoderParams = new EncoderParameters(1);
         _encoderParams.Param[0] = new EncoderParameter(Encoder.Quality, (long)_jpegQuality);
+    }
+
+    /// <summary>
+    /// Dynamically updates the JPEG compression quality at runtime.
+    /// Disposes the previous <see cref="EncoderParameter"/> to prevent GDI+ memory leaks.
+    /// </summary>
+    /// <param name="newJpegQuality">New quality level (clamped to 10–100).</param>
+    public void UpdateQuality(int newJpegQuality)
+    {
+        _jpegQuality = Math.Clamp(newJpegQuality, 10, 100);
+        _encoderParams.Param[0].Dispose();
+        _encoderParams.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.Quality, (long)_jpegQuality);
     }
 
     /// <summary>

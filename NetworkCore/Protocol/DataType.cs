@@ -32,5 +32,8 @@ public enum DataType : byte
     HostRegistered = 9,
     JoinSession = 10,
     SessionPaired = 11,
-    SessionError = 12
+    SessionError = 12,
+
+    /// <summary>Viewer → Host: dynamic quality/interval adjustment command.</summary>
+    QualityCommand = 13
 }

@@ -22,6 +22,12 @@ public partial class Form1 : Form
     private readonly Stopwatch _mouseMoveTimer = Stopwatch.StartNew();
     private Point _lastSentMousePos = Point.Empty;
 
+    // ─── Dynamic Quality Scaling state ───
+    private readonly Stopwatch _frameDeltaTimer = new();
+    private readonly Stopwatch _qualityCooldownTimer = Stopwatch.StartNew();
+    private int _currentTrackingQuality = 50;
+    private int _currentTrackingInterval = 80;
+
     public Form1()
     {
         InitializeComponent();
@@ -258,6 +264,37 @@ public partial class Form1 : Form
 
             case DataType.Image:
                 if (!_isPaired) return;
+
+                // ─── Dynamic Quality Scaling: measure inter-frame latency ───
+                long frameTimeMs = _frameDeltaTimer.ElapsedMilliseconds;
+                _frameDeltaTimer.Restart();
+
+                if (_qualityCooldownTimer.ElapsedMilliseconds > 2000)
+                {
+                    bool needsAdjustment = false;
+                    if (frameTimeMs > 180)
+                    {
+                        _currentTrackingQuality = Math.Max(20, _currentTrackingQuality - 10);
+                        _currentTrackingInterval = Math.Min(200, _currentTrackingInterval + 20);
+                        needsAdjustment = true;
+                    }
+                    else if (frameTimeMs < 60 && _currentTrackingQuality < 80)
+                    {
+                        _currentTrackingQuality = Math.Min(80, _currentTrackingQuality + 5);
+                        _currentTrackingInterval = Math.Max(40, _currentTrackingInterval - 10);
+                        needsAdjustment = true;
+                    }
+
+                    if (needsAdjustment && _client is not null && _client.IsConnected)
+                    {
+                        var qCmd = new QualityPacket { JpegQuality = _currentTrackingQuality, StreamIntervalMs = _currentTrackingInterval };
+                        var packet = PacketBuilder.Build(DataType.QualityCommand, qCmd.ToBytes());
+                        _ = _client.SendDataAsync(packet);
+                        _qualityCooldownTimer.Restart();
+                    }
+                }
+
+                // ─── Render frame ───
                 SafeInvoke(() =>
                 {
                     ImageHelper.UpdatePictureBox(pbScreen, parsed.Payload);
