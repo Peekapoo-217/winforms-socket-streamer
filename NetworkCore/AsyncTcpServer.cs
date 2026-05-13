@@ -31,6 +31,11 @@ public sealed class AsyncTcpServer : IDisposable
     /// </summary>
     private readonly ConcurrentDictionary<string, TcpClient> _clients = new();
 
+    /// <summary>
+    /// Per-client write locks to prevent concurrent frame interleaving.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _clientSendLocks = new();
+
     // ───────────────────────── Events ─────────────────────────
 
     /// <summary>Raised when a new client connects.</summary>
@@ -100,7 +105,16 @@ public sealed class AsyncTcpServer : IDisposable
         if (!_clients.TryGetValue(clientId, out var client))
             throw new InvalidOperationException($"Client '{clientId}' is not connected.");
 
-        await SendFrameAsync(client.GetStream(), data).ConfigureAwait(false);
+        var sendLock = _clientSendLocks.GetOrAdd(clientId, _ => new SemaphoreSlim(1, 1));
+        await sendLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await SendFrameAsync(client.GetStream(), data).ConfigureAwait(false);
+        }
+        finally
+        {
+            sendLock.Release();
+        }
     }
 
     /// <summary>
@@ -184,6 +198,7 @@ public sealed class AsyncTcpServer : IDisposable
 
                 if (_clients.TryAdd(clientId, tcpClient))
                 {
+                    _clientSendLocks.TryAdd(clientId, new SemaphoreSlim(1, 1));
                     var remoteEp = (IPEndPoint)tcpClient.Client.RemoteEndPoint!;
                     OnClientConnected(clientId, remoteEp);
 
@@ -220,7 +235,7 @@ public sealed class AsyncTcpServer : IDisposable
 
                 var frameLength = IPAddress.NetworkToHostOrder(BitConverter.ToInt32(lengthBytes, 0));
 
-                if (frameLength <= 0 || frameLength > 50_000_000) // 50 MB safety cap
+                if (frameLength <= 0 || frameLength > 10_000_000) // 10 MB safety cap
                 {
                     OnErrorOccurred($"Client {clientId}", new InvalidDataException($"Invalid frame length: {frameLength}"));
                     break;
@@ -247,6 +262,7 @@ public sealed class AsyncTcpServer : IDisposable
             {
                 tcpClient.Close();
                 tcpClient.Dispose();
+                if (_clientSendLocks.TryRemove(clientId, out var sl)) sl.Dispose();
                 OnClientDisconnected(clientId);
             }
         }
@@ -275,13 +291,16 @@ public sealed class AsyncTcpServer : IDisposable
     }
 
     /// <summary>
-    /// Writes a 4-byte big-endian length header followed by the payload to the stream.
+    /// Writes a 4-byte big-endian length header + payload as a SINGLE contiguous
+    /// buffer to eliminate the risk of interleaved writes.
     /// </summary>
     private static async Task SendFrameAsync(NetworkStream stream, byte[] data)
     {
         var header = BitConverter.GetBytes(IPAddress.HostToNetworkOrder(data.Length));
-        await stream.WriteAsync(header).ConfigureAwait(false);
-        await stream.WriteAsync(data).ConfigureAwait(false);
+        var frame = new byte[4 + data.Length];
+        Buffer.BlockCopy(header, 0, frame, 0, 4);
+        Buffer.BlockCopy(data, 0, frame, 4, data.Length);
+        await stream.WriteAsync(frame).ConfigureAwait(false);
         await stream.FlushAsync().ConfigureAwait(false);
     }
 

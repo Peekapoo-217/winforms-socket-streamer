@@ -22,6 +22,9 @@ public partial class Form1 : Form
     private string _password = "";
     private bool _isPaired = false;
 
+    // ─── Live System Monitor ───
+    private HardwareMonitorService? _monitor;
+
     public Form1()
     {
         InitializeComponent();
@@ -150,6 +153,10 @@ public partial class Form1 : Form
         btnToggleStream.BackColor = Color.FromArgb(178, 34, 34);
         AppendLog($"Streaming started ({_streamIntervalMs}ms, q={JpegQuality}).", Color.DeepSkyBlue);
         _ = StreamLoopAsync(_streamCts.Token);
+
+        // Launch hardware monitor loop in parallel
+        _monitor = new HardwareMonitorService();
+        _ = MonitorLoopAsync(_streamCts.Token);
     }
 
     private void StopStreaming()
@@ -157,6 +164,7 @@ public partial class Form1 : Form
         if (!_isStreaming) return;
         _streamCts?.Cancel(); _streamCts?.Dispose(); _streamCts = null;
         _capturer = null; _isStreaming = false;
+        _monitor?.Dispose(); _monitor = null;
         btnToggleStream.Text = "📺 Stream";
         btnToggleStream.BackColor = Color.FromArgb(70, 130, 180);
         lblFps.Text = "";
@@ -195,6 +203,34 @@ public partial class Form1 : Form
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) { SafeInvoke(() => AppendLog($"Stream error: {ex.Message}", Color.OrangeRed)); }
+    }
+
+    /// <summary>
+    /// Sends CPU/RAM telemetry to the Viewer every 1 second.
+    /// Runs on a separate Task, sharing the same CancellationToken as StreamLoop.
+    /// </summary>
+    private async Task MonitorLoopAsync(CancellationToken ct)
+    {
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                await Task.Delay(1000, ct).ConfigureAwait(false);
+
+                if (_monitor is null || _client is null || !_client.IsConnected || !_isPaired)
+                    continue;
+
+                try
+                {
+                    var stats = _monitor.GetCurrentStats();
+                    var packet = stats.BuildPacket();
+                    await _client.SendDataAsync(packet);
+                }
+                catch { /* connection dropped — let the disconnect handler clean up */ }
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { SafeInvoke(() => AppendLog($"Monitor error: {ex.Message}", Color.OrangeRed)); }
     }
 
     // ═══════════════════════ Client Events ═══════════════════════

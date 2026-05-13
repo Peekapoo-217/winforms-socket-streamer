@@ -35,5 +35,8 @@ public enum DataType : byte
     SessionError = 12,
 
     /// <summary>Viewer → Host: dynamic quality/interval adjustment command.</summary>
-    QualityCommand = 13
+    QualityCommand = 13,
+
+    /// <summary>Host → Viewer: live CPU/RAM usage telemetry.</summary>
+    SystemMonitor = 14
 }

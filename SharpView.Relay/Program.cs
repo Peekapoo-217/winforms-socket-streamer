@@ -165,8 +165,10 @@ class Program
     private static async Task SendFrameAsync(NetworkStream stream, byte[] data)
     {
         var header = BitConverter.GetBytes(IPAddress.HostToNetworkOrder(data.Length));
-        await stream.WriteAsync(header);
-        await stream.WriteAsync(data);
+        var frame = new byte[4 + data.Length];
+        Buffer.BlockCopy(header, 0, frame, 0, 4);
+        Buffer.BlockCopy(data, 0, frame, 4, data.Length);
+        await stream.WriteAsync(frame);
         await stream.FlushAsync();
     }
 }

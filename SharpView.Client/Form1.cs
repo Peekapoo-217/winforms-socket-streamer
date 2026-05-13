@@ -4,6 +4,10 @@ using NetworkCore.Protocol;
 using SharpView.Client.Helpers;
 using System.Diagnostics;
 using System.Text;
+using LiveCharts;
+using LiveCharts.Wpf;
+using WpfBrush = System.Windows.Media.SolidColorBrush;
+using WpfColor = System.Windows.Media.Color;
 
 namespace SharpView.Client;
 
@@ -28,6 +32,11 @@ public partial class Form1 : Form
     private int _currentTrackingQuality = 50;
     private int _currentTrackingInterval = 80;
 
+    // ─── Live Chart state ───
+    private const int MaxHistoryRecords = 60;
+    private ChartValues<double> _cpuValues = new();
+    private ChartValues<double> _ramValues = new();
+
     public Form1()
     {
         InitializeComponent();
@@ -41,6 +50,56 @@ public partial class Form1 : Form
         pbScreen.MouseDown += PbScreen_MouseDown;
         pbScreen.MouseUp += PbScreen_MouseUp;
         pbScreen.MouseWheel += PbScreen_MouseWheel;
+
+        InitializeLiveChart();
+    }
+
+    // ═══════════════════════ Live Chart Setup ═══════════════════════
+
+    private void InitializeLiveChart()
+    {
+        sysChart.Series = new SeriesCollection
+        {
+            new LineSeries
+            {
+                Title = "CPU %",
+                Values = _cpuValues,
+                PointGeometry = null,
+                Stroke = new WpfBrush(WpfColor.FromRgb(120, 220, 160)),
+                Fill = new WpfBrush(WpfColor.FromArgb(30, 120, 220, 160)),
+                StrokeThickness = 2,
+                LineSmoothness = 0.6
+            },
+            new LineSeries
+            {
+                Title = "RAM %",
+                Values = _ramValues,
+                PointGeometry = null,
+                Stroke = new WpfBrush(WpfColor.FromRgb(255, 180, 100)),
+                Fill = new WpfBrush(WpfColor.FromArgb(30, 255, 180, 100)),
+                StrokeThickness = 2,
+                LineSmoothness = 0.6
+            }
+        };
+
+        sysChart.AxisY.Add(new Axis
+        {
+            MinValue = 0,
+            MaxValue = 100,
+            LabelFormatter = val => $"{val:F0}%",
+            Foreground = new WpfBrush(WpfColor.FromRgb(160, 170, 180)),
+            Separator = new LiveCharts.Wpf.Separator { StrokeThickness = 0.3 }
+        });
+
+        sysChart.AxisX.Add(new Axis
+        {
+            ShowLabels = false,
+            Separator = new LiveCharts.Wpf.Separator { StrokeThickness = 0 }
+        });
+
+        sysChart.DisableAnimations = true;
+        sysChart.Hoverable = false;
+        sysChart.DataTooltip = null;
     }
 
     // ═══════════════════════ UI Events ═══════════════════════
@@ -321,6 +380,28 @@ public partial class Form1 : Form
                 {
                     var text = Encoding.UTF8.GetString(parsed.Payload);
                     AppendLog($"[📩] Host: {text}", Color.Gold);
+                });
+                break;
+
+            // ─── Live System Monitor ───
+
+            case DataType.SystemMonitor:
+                if (!_isPaired) return;
+                SafeInvoke(() =>
+                {
+                    var monitor = MonitorPacket.FromBytes(parsed.Payload);
+                    lblCpuInfo.Text = $"CPU: {monitor.CpuUsage:F1}%";
+                    lblRamInfo.Text = $"RAM: {monitor.RamUsagePercentage:F1}%";
+
+                    // Push data to chart (sliding window)
+                    _cpuValues.Add((double)monitor.CpuUsage);
+                    _ramValues.Add((double)monitor.RamUsagePercentage);
+
+                    if (_cpuValues.Count > MaxHistoryRecords)
+                    {
+                        _cpuValues.RemoveAt(0);
+                        _ramValues.RemoveAt(0);
+                    }
                 });
                 break;
 

@@ -33,6 +33,10 @@ partial class Form1
         panelTop = new Panel();
         panelAuth = new Panel();
         splitContainer = new SplitContainer();
+        lblCpuInfo = new Label();
+        lblRamInfo = new Label();
+        panelChart = new Panel();
+        sysChart = new LiveCharts.WinForms.CartesianChart();
 
         ((System.ComponentModel.ISupportInitialize)pbScreen).BeginInit();
         panelTop.SuspendLayout();
@@ -196,7 +200,10 @@ partial class Form1
         splitContainer.Orientation = Orientation.Horizontal;
         splitContainer.Panel1.Controls.Add(pbScreen);
         splitContainer.Panel1.Controls.Add(lblFrameInfo);
+        splitContainer.Panel1.Controls.Add(lblCpuInfo);
+        splitContainer.Panel1.Controls.Add(lblRamInfo);
         splitContainer.Panel2.Controls.Add(rtbLogs);
+        splitContainer.Panel2.Controls.Add(panelChart);
         splitContainer.Size = new Size(1029, 735);
         splitContainer.SplitterDistance = 520;
         splitContainer.SplitterWidth = 5;
@@ -224,6 +231,34 @@ partial class Form1
         lblFrameInfo.TabIndex = 1;
         lblFrameInfo.TextAlign = ContentAlignment.MiddleRight;
 
+        // ─── lblCpuInfo ───
+        lblCpuInfo.AutoSize = false;
+        lblCpuInfo.BackColor = Color.FromArgb(20, 20, 25);
+        lblCpuInfo.Dock = DockStyle.Bottom;
+        lblCpuInfo.Font = new Font("Segoe UI Semibold", 8F);
+        lblCpuInfo.ForeColor = Color.FromArgb(120, 220, 160);
+        lblCpuInfo.Location = new Point(0, 520);
+        lblCpuInfo.Name = "lblCpuInfo";
+        lblCpuInfo.Padding = new Padding(9, 0, 0, 0);
+        lblCpuInfo.Size = new Size(515, 27);
+        lblCpuInfo.TabIndex = 2;
+        lblCpuInfo.Text = "CPU: --";
+        lblCpuInfo.TextAlign = ContentAlignment.MiddleLeft;
+
+        // ─── lblRamInfo ───
+        lblRamInfo.AutoSize = false;
+        lblRamInfo.BackColor = Color.FromArgb(20, 20, 25);
+        lblRamInfo.Dock = DockStyle.Bottom;
+        lblRamInfo.Font = new Font("Segoe UI Semibold", 8F);
+        lblRamInfo.ForeColor = Color.FromArgb(255, 180, 100);
+        lblRamInfo.Location = new Point(515, 520);
+        lblRamInfo.Name = "lblRamInfo";
+        lblRamInfo.Padding = new Padding(9, 0, 0, 0);
+        lblRamInfo.Size = new Size(514, 27);
+        lblRamInfo.TabIndex = 3;
+        lblRamInfo.Text = "RAM: --";
+        lblRamInfo.TextAlign = ContentAlignment.MiddleLeft;
+
         // ─── rtbLogs ───
         rtbLogs.BackColor = Color.FromArgb(25, 25, 30);
         rtbLogs.BorderStyle = BorderStyle.None;
@@ -236,6 +271,22 @@ partial class Form1
         rtbLogs.Size = new Size(1029, 210);
         rtbLogs.TabIndex = 0;
         rtbLogs.Text = "";
+
+        // ─── panelChart ─── (container for the live chart at the bottom of Panel2)
+        panelChart.BackColor = Color.FromArgb(20, 22, 28);
+        panelChart.Controls.Add(sysChart);
+        panelChart.Dock = DockStyle.Bottom;
+        panelChart.Name = "panelChart";
+        panelChart.Size = new Size(1029, 150);
+        panelChart.TabIndex = 4;
+
+        // ─── sysChart ─── (LiveCharts CartesianChart)
+        sysChart.BackColor = Color.FromArgb(20, 22, 28);
+        sysChart.Dock = DockStyle.Fill;
+        sysChart.Location = new Point(0, 0);
+        sysChart.Name = "sysChart";
+        sysChart.Size = new Size(1029, 150);
+        sysChart.TabIndex = 0;
 
         // ─── lblStatus ───
         lblStatus.BackColor = Color.FromArgb(35, 35, 42);
@@ -296,4 +347,8 @@ partial class Form1
     private Panel panelTop;
     private Panel panelAuth;
     private SplitContainer splitContainer;
+    private Label lblCpuInfo;
+    private Label lblRamInfo;
+    private Panel panelChart;
+    private LiveCharts.WinForms.CartesianChart sysChart;
 }

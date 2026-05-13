@@ -25,6 +25,13 @@ public sealed class AsyncTcpClient : IDisposable
     private CancellationTokenSource? _cts;
     private bool _disposed;
 
+    /// <summary>
+    /// Serializes concurrent writes to the NetworkStream.
+    /// Without this, two async tasks (e.g. StreamLoop + MonitorLoop) can
+    /// interleave their header/payload bytes, corrupting the framing protocol.
+    /// </summary>
+    private readonly SemaphoreSlim _sendLock = new(1, 1);
+
     // ───────────────────────── Events ─────────────────────────
 
     /// <summary>Raised when the client successfully connects to the server.</summary>
@@ -104,7 +111,15 @@ public sealed class AsyncTcpClient : IDisposable
         if (_stream is null || !IsConnected)
             throw new InvalidOperationException("Client is not connected to any server.");
 
-        await SendFrameAsync(_stream, data).ConfigureAwait(false);
+        await _sendLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await SendFrameAsync(_stream, data).ConfigureAwait(false);
+        }
+        finally
+        {
+            _sendLock.Release();
+        }
     }
 
     /// <summary>
@@ -143,7 +158,7 @@ public sealed class AsyncTcpClient : IDisposable
 
                 var frameLength = IPAddress.NetworkToHostOrder(BitConverter.ToInt32(lengthBytes, 0));
 
-                if (frameLength <= 0 || frameLength > 50_000_000) // 50 MB safety cap
+                if (frameLength <= 0 || frameLength > 10_000_000) // 10 MB safety cap
                 {
                     OnErrorOccurred("ReceiveLoop", new InvalidDataException($"Invalid frame length: {frameLength}"));
                     break;
@@ -193,13 +208,19 @@ public sealed class AsyncTcpClient : IDisposable
     }
 
     /// <summary>
-    /// Writes a 4-byte big-endian length header followed by the payload to the stream.
+    /// Writes a 4-byte big-endian length header + payload as a SINGLE contiguous
+    /// buffer to eliminate the risk of interleaved writes from concurrent tasks.
     /// </summary>
     private static async Task SendFrameAsync(NetworkStream stream, byte[] data)
     {
         var header = BitConverter.GetBytes(IPAddress.HostToNetworkOrder(data.Length));
-        await stream.WriteAsync(header).ConfigureAwait(false);
-        await stream.WriteAsync(data).ConfigureAwait(false);
+
+        // Combine header + payload into one buffer so it goes out in a single WriteAsync call.
+        var frame = new byte[4 + data.Length];
+        Buffer.BlockCopy(header, 0, frame, 0, 4);
+        Buffer.BlockCopy(data, 0, frame, 4, data.Length);
+
+        await stream.WriteAsync(frame).ConfigureAwait(false);
         await stream.FlushAsync().ConfigureAwait(false);
     }
 
@@ -226,5 +247,6 @@ public sealed class AsyncTcpClient : IDisposable
 
         Disconnect();
         _cts?.Dispose();
+        _sendLock.Dispose();
     }
 }
