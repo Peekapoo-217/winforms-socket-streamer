@@ -41,4 +41,13 @@ public static class PacketBuilder
         var payload = System.Text.Encoding.UTF8.GetBytes(message);
         return Build(DataType.Text, payload);
     }
+
+    /// <summary>
+    /// Convenience overload: serializes a <see cref="ChatPacket"/> as a <see cref="DataType.Chat"/> packet.
+    /// </summary>
+    public static byte[] BuildChat(ChatPacket chatPacket)
+    {
+        ArgumentNullException.ThrowIfNull(chatPacket);
+        return Build(DataType.Chat, chatPacket.ToBytes());
+    }
 }

@@ -4,6 +4,7 @@ using NetworkCore.Protocol;
 using SharpView.Server.Helpers;
 using System.Diagnostics;
 using System.Management;
+using System.Net;
 using System.Text;
 
 namespace SharpView.Server;
@@ -21,6 +22,13 @@ public partial class Form1 : Form
     private readonly string _partnerId;
     private string _password = "";
     private bool _isPaired = false;
+
+    // ─── Chat ───
+    private ChatWindow? _chatWindow;
+
+    // ─── UDP Typing Indicator ───
+    private AsyncUdpMessenger? _udpMessenger;
+    private IPEndPoint? _peerUdpEndpoint;
 
     // ─── Live System Monitor ───
     private HardwareMonitorService? _monitor;
@@ -131,6 +139,42 @@ public partial class Form1 : Form
     private void BtnToggleStream_Click(object? sender, EventArgs e)
     {
         if (_isStreaming) StopStreaming(); else StartStreaming();
+    }
+
+    private void BtnChat_Click(object? sender, EventArgs e)
+    {
+        if (_client is null || !_client.IsConnected || !_isPaired)
+        { AppendLog("Not paired — cannot open chat.", Color.OrangeRed); return; }
+
+        if (_chatWindow is null || _chatWindow.IsDisposed)
+        {
+            _chatWindow = new ChatWindow(_client, ChatStrings.DefaultSenderName, _udpMessenger, _peerUdpEndpoint);
+        }
+
+        if (!_chatWindow.Visible)
+            _chatWindow.Show(this);
+        else
+            _chatWindow.BringToFront();
+    }
+
+    private void BtnCopyId_Click(object? sender, EventArgs e)
+    {
+        var id = lblPartnerId.Text.Replace(" ", "").Trim();
+        if (!string.IsNullOrEmpty(id) && id != "------")
+        {
+            Clipboard.SetText(id);
+            toolTipCopy.Show(ChatStrings.CopiedTooltip, btnCopyId, 0, -25, 2000);
+        }
+    }
+
+    private void BtnCopyPass_Click(object? sender, EventArgs e)
+    {
+        var pass = _password;
+        if (!string.IsNullOrEmpty(pass))
+        {
+            Clipboard.SetText(pass);
+            toolTipCopy.Show(ChatStrings.CopiedTooltip, btnCopyPass, 0, -25, 2000);
+        }
     }
 
     private void Form1_FormClosing(object? sender, FormClosingEventArgs e)
@@ -272,7 +316,9 @@ public partial class Form1 : Form
                 {
                     AppendLog("[🔓] Viewer joined! Starting stream...", Color.LimeGreen);
                     UpdateStreamButton();
-                    StartStreaming(); // Auto-start streaming
+                    btnChat.Enabled = true;
+                    StartStreaming();
+                    StartUdpMessenger();
                 });
                 break;
 
@@ -307,6 +353,47 @@ public partial class Form1 : Form
             case DataType.Text:
                 if (!_isPaired) return;
                 SafeInvoke(() => AppendLog($"[📩] Viewer: {Encoding.UTF8.GetString(p.Payload)}", Color.Gold));
+                break;
+
+            // ─── Chat ───
+
+            case DataType.Chat:
+                if (!_isPaired) return;
+                try
+                {
+                    var chatMsg = PacketParser.ParseChat(p.Payload);
+                    SafeInvoke(() =>
+                    {
+                        // Auto-open chat window if not visible
+                        if (_chatWindow is null || _chatWindow.IsDisposed)
+                            _chatWindow = new ChatWindow(_client!, ChatStrings.DefaultSenderName, _udpMessenger, _peerUdpEndpoint);
+
+                        if (!_chatWindow.Visible)
+                            _chatWindow.Show(this);
+
+                        _chatWindow.AppendIncomingMessage(chatMsg);
+                    });
+                }
+                catch (Exception ex)
+                {
+                    SafeInvoke(() => AppendLog($"[⚠] Chat parse error: {ex.Message}", Color.OrangeRed));
+                }
+                break;
+
+            // ─── UDP Endpoint Exchange ───
+
+            case DataType.UdpEndpoint:
+                if (!_isPaired) return;
+                try
+                {
+                    var udpInfo = UdpEndpointPacket.FromBytes(p.Payload);
+                    _peerUdpEndpoint = new IPEndPoint(IPAddress.Parse(udpInfo.IpAddress), udpInfo.UdpPort);
+                    SafeInvoke(() => AppendLog($"[📡] Peer UDP endpoint: {_peerUdpEndpoint}", Color.DeepSkyBlue));
+                }
+                catch (Exception ex)
+                {
+                    SafeInvoke(() => AppendLog($"[⚠] UDP endpoint parse error: {ex.Message}", Color.OrangeRed));
+                }
                 break;
 
             default:
@@ -355,6 +442,7 @@ public partial class Form1 : Form
         btnStart.Enabled = !running; btnStop.Enabled = running;
         txtPort.Enabled = !running; txtRelayIp.Enabled = !running;
         UpdateStreamButton();
+        btnChat.Enabled = running && _isPaired;
         lblStatus.Text = running ? "  ● Connected to Relay" : "  ● Stopped";
         lblStatus.ForeColor = running ? Color.LimeGreen : Color.IndianRed;
 
@@ -367,11 +455,45 @@ public partial class Form1 : Form
 
     private void StopServer()
     {
+        // Notify and close the chat window
+        if (_chatWindow is not null && !_chatWindow.IsDisposed)
+        {
+            _chatWindow.AppendSystemMessage(ChatStrings.PartnerDisconnected);
+        }
+
         if (_client is null) return;
         _client.Connected -= Client_Connected;
         _client.Disconnected -= Client_Disconnected;
         _client.DataReceived -= Client_DataReceived;
         _client.ErrorOccurred -= Client_ErrorOccurred;
         _client.Dispose(); _client = null;
+
+        // Cleanup UDP
+        _udpMessenger?.Dispose(); _udpMessenger = null;
+        _peerUdpEndpoint = null;
+    }
+
+    // ═══════════════════════ UDP Typing Setup ═══════════════════════
+
+    private async void StartUdpMessenger()
+    {
+        try
+        {
+            _udpMessenger = new AsyncUdpMessenger(UdpSettings.DefaultUdpPort);
+            _udpMessenger.StartListening();
+
+            var localIp = AsyncUdpMessenger.GetLocalLanIp();
+            var endpointPacket = new UdpEndpointPacket
+            {
+                IpAddress = localIp.ToString(),
+                UdpPort = UdpSettings.DefaultUdpPort
+            };
+            await _client!.SendDataAsync(endpointPacket.BuildPacket());
+            AppendLog($"[📡] UDP listening on {localIp}:{UdpSettings.DefaultUdpPort}", Color.DeepSkyBlue);
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"[⚠] UDP setup failed: {ex.Message}", Color.OrangeRed);
+        }
     }
 }

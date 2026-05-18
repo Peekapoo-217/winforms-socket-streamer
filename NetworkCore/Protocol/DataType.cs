@@ -38,5 +38,11 @@ public enum DataType : byte
     QualityCommand = 13,
 
     /// <summary>Host → Viewer: live CPU/RAM usage telemetry.</summary>
-    SystemMonitor = 14
+    SystemMonitor = 14,
+
+    /// <summary>Bidirectional chat message between Host and Viewer.</summary>
+    Chat = 15,
+
+    /// <summary>Exchanges UDP endpoint info (IP + port) for direct typing indicators.</summary>
+    UdpEndpoint = 16
 }
