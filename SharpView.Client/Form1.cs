@@ -3,6 +3,7 @@ using NetworkCore.Events;
 using NetworkCore.Protocol;
 using SharpView.Client.Helpers;
 using System.Diagnostics;
+using System.Net;
 using System.Text;
 using LiveCharts;
 using LiveCharts.Wpf;
@@ -19,6 +20,13 @@ public partial class Form1 : Form
 
     // ─── Relay Session State ───
     private bool _isPaired;
+
+    // ─── Chat ───
+    private ChatWindow? _chatWindow;
+
+    // ─── UDP Typing Indicator ───
+    private AsyncUdpMessenger? _udpMessenger;
+    private IPEndPoint? _peerUdpEndpoint;
 
     // ─── Remote input state ───
     private Size _serverScreenSize = Size.Empty;
@@ -141,6 +149,23 @@ public partial class Form1 : Form
         }
         catch (Exception ex)
         { AppendLog($"Connection failed: {ex.Message}", Color.OrangeRed); CleanupClient(); }
+    }
+
+    private void BtnChat_Click(object? sender, EventArgs e)
+    {
+        if (_client is null || !_client.IsConnected || !_isPaired)
+        { AppendLog("Not paired — cannot open chat.", Color.OrangeRed); return; }
+
+        if (_chatWindow is null || _chatWindow.IsDisposed)
+        {
+            _chatWindow = new ChatWindow(_client, ChatStrings.DefaultSenderName, _udpMessenger, _peerUdpEndpoint);
+            _chatWindow.QuickConnectRequested += ChatWindow_QuickConnectRequested;
+        }
+
+        if (!_chatWindow.Visible)
+            _chatWindow.Show(this);
+        else
+            _chatWindow.BringToFront();
     }
 
     private void BtnDisconnect_Click(object? sender, EventArgs e)
@@ -305,6 +330,7 @@ public partial class Form1 : Form
                     _isPaired = true;
                     AppendLog("[🔓] Session paired! Awaiting stream...", Color.LimeGreen);
                     SetConnectedState(true);
+                    StartUdpMessenger();
                 });
                 break;
 
@@ -383,6 +409,50 @@ public partial class Form1 : Form
                 });
                 break;
 
+            // ─── Chat ───
+
+            case DataType.Chat:
+                if (!_isPaired) return;
+                try
+                {
+                    var chatMsg = PacketParser.ParseChat(parsed.Payload);
+                    SafeInvoke(() =>
+                    {
+                        // Auto-open chat window if not visible
+                        if (_chatWindow is null || _chatWindow.IsDisposed)
+                        {
+                            _chatWindow = new ChatWindow(_client!, ChatStrings.DefaultSenderName, _udpMessenger, _peerUdpEndpoint);
+                            _chatWindow.QuickConnectRequested += ChatWindow_QuickConnectRequested;
+                        }
+
+                        if (!_chatWindow.Visible)
+                            _chatWindow.Show(this);
+
+                        _chatWindow.AppendIncomingMessage(chatMsg);
+                    });
+                }
+                catch (Exception ex)
+                {
+                    SafeInvoke(() => AppendLog($"[⚠] Chat parse error: {ex.Message}", Color.OrangeRed));
+                }
+                break;
+
+            // ─── UDP Endpoint Exchange ───
+
+            case DataType.UdpEndpoint:
+                if (!_isPaired) return;
+                try
+                {
+                    var udpInfo = UdpEndpointPacket.FromBytes(parsed.Payload);
+                    _peerUdpEndpoint = new IPEndPoint(IPAddress.Parse(udpInfo.IpAddress), udpInfo.UdpPort);
+                    SafeInvoke(() => AppendLog($"[📡] Peer UDP endpoint: {_peerUdpEndpoint}", Color.DeepSkyBlue));
+                }
+                catch (Exception ex)
+                {
+                    SafeInvoke(() => AppendLog($"[⚠] UDP endpoint parse error: {ex.Message}", Color.OrangeRed));
+                }
+                break;
+
             // ─── Live System Monitor ───
 
             case DataType.SystemMonitor:
@@ -438,6 +508,7 @@ public partial class Form1 : Form
     {
         btnConnect.Enabled = !connected; btnDisconnect.Enabled = connected;
         btnPing.Enabled = connected && _isPaired;
+        btnChat.Enabled = connected && _isPaired;
         txtIp.Enabled = !connected; txtPort.Enabled = !connected;
         txtPartnerId.Enabled = !connected; txtPassword.Enabled = !connected;
         lblStatus.Text = connected && _isPaired
@@ -451,6 +522,12 @@ public partial class Form1 : Form
 
     private void CleanupClient()
     {
+        // Notify and close the chat window
+        if (_chatWindow is not null && !_chatWindow.IsDisposed)
+        {
+            _chatWindow.AppendSystemMessage(ChatStrings.PartnerDisconnected);
+        }
+
         if (_client is null) return;
         _client.Connected -= Client_Connected;
         _client.Disconnected -= Client_Disconnected;
@@ -458,5 +535,47 @@ public partial class Form1 : Form
         _client.ErrorOccurred -= Client_ErrorOccurred;
         _client.Dispose(); _client = null;
         _isPaired = false;
+
+        // Cleanup UDP
+        _udpMessenger?.Dispose(); _udpMessenger = null;
+        _peerUdpEndpoint = null;
+    }
+
+    // ═══════════════════════ UDP Typing Setup ═══════════════════════
+
+    private async void StartUdpMessenger()
+    {
+        try
+        {
+            _udpMessenger = new AsyncUdpMessenger(UdpSettings.DefaultUdpPort);
+            _udpMessenger.StartListening();
+
+            // Send our LAN IP + UDP port to peer via TCP relay
+            var localIp = AsyncUdpMessenger.GetLocalLanIp();
+            var endpointPacket = new UdpEndpointPacket
+            {
+                IpAddress = localIp.ToString(),
+                UdpPort = UdpSettings.DefaultUdpPort
+            };
+            await _client!.SendDataAsync(endpointPacket.BuildPacket());
+            AppendLog($"[📡] UDP listening on {localIp}:{UdpSettings.DefaultUdpPort}", Color.DeepSkyBlue);
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"[⚠] UDP setup failed: {ex.Message}", Color.OrangeRed);
+        }
+    }
+
+    // ═══════════════════════ Quick Connect (from Chat) ═══════════════════════
+
+    private void ChatWindow_QuickConnectRequested(object? sender, QuickConnectEventArgs e)
+    {
+        // Fill in the main form TextBoxes
+        txtPartnerId.Text = e.PartnerId;
+        txtPassword.Text = e.Password;
+        AppendLog($"[📥] Quick Connect — ID: {e.PartnerId}, Pass: {e.Password}", Color.Gold);
+
+        // Trigger the connect flow
+        BtnConnect_Click(this, EventArgs.Empty);
     }
 }

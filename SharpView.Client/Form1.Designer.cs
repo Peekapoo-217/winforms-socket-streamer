@@ -26,6 +26,7 @@ partial class Form1
         btnConnect = new Button();
         btnDisconnect = new Button();
         btnPing = new Button();
+        btnChat = new Button();
         pbScreen = new PictureBox();
         rtbLogs = new RichTextBox();
         lblStatus = new Label();
@@ -125,6 +126,21 @@ partial class Form1
         btnPing.UseVisualStyleBackColor = false;
         btnPing.Click += BtnPing_Click;
 
+        // ─── btnChat ───
+        btnChat.BackColor = Color.FromArgb(90, 80, 160);
+        btnChat.Cursor = Cursors.Hand;
+        btnChat.Enabled = false;
+        btnChat.FlatStyle = FlatStyle.Flat;
+        btnChat.Font = new Font("Segoe UI Semibold", 9F);
+        btnChat.ForeColor = Color.White;
+        btnChat.Location = new Point(625, 10);
+        btnChat.Name = "btnChat";
+        btnChat.Size = new Size(85, 36);
+        btnChat.TabIndex = 12;
+        btnChat.Text = "💬 Chat";
+        btnChat.UseVisualStyleBackColor = false;
+        btnChat.Click += BtnChat_Click;
+
         // ─── panelAuth ─── (Partner ID + Password input row)
         panelAuth.BackColor = Color.FromArgb(38, 42, 52);
         panelAuth.Controls.Add(txtPassword);
@@ -178,6 +194,7 @@ partial class Form1
         txtPassword.UseSystemPasswordChar = true;
 
         // ─── panelTop ───
+        panelTop.Controls.Add(btnChat);
         panelTop.Controls.Add(btnPing);
         panelTop.Controls.Add(btnDisconnect);
         panelTop.Controls.Add(btnConnect);
@@ -340,6 +357,7 @@ partial class Form1
     private Button btnConnect;
     private Button btnDisconnect;
     private Button btnPing;
+    private Button btnChat;
     private PictureBox pbScreen;
     private RichTextBox rtbLogs;
     private Label lblStatus;

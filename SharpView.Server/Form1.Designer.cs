@@ -24,6 +24,7 @@ partial class Form1
         btnStart = new Button();
         btnStop = new Button();
         btnToggleStream = new Button();
+        btnChat = new Button();
         lblFps = new Label();
         lblClients = new Label();
 
@@ -37,6 +38,9 @@ partial class Form1
         lblStatus = new Label();
         panelTop = new Panel();
         panelInfoBar = new Panel();
+        btnCopyId = new Button();
+        btnCopyPass = new Button();
+        toolTipCopy = new ToolTip();
 
         panelTop.SuspendLayout();
         panelInfoBar.SuspendLayout();
@@ -120,6 +124,21 @@ partial class Form1
         btnToggleStream.UseVisualStyleBackColor = false;
         btnToggleStream.Click += BtnToggleStream_Click;
 
+        // ─── btnChat ───
+        btnChat.BackColor = Color.FromArgb(90, 80, 160);
+        btnChat.Cursor = Cursors.Hand;
+        btnChat.Enabled = false;
+        btnChat.FlatStyle = FlatStyle.Flat;
+        btnChat.Font = new Font("Segoe UI Semibold", 9F);
+        btnChat.ForeColor = Color.White;
+        btnChat.Location = new Point(625, 16);
+        btnChat.Name = "btnChat";
+        btnChat.Size = new Size(90, 43);
+        btnChat.TabIndex = 9;
+        btnChat.Text = "💬 Chat";
+        btnChat.UseVisualStyleBackColor = false;
+        btnChat.Click += BtnChat_Click;
+
         // ─── lblClients ───
         lblClients.AutoSize = true;
         lblClients.Font = new Font("Segoe UI", 9F);
@@ -141,8 +160,10 @@ partial class Form1
 
         // ─── panelInfoBar ─── (displays Partner ID + Password)
         panelInfoBar.BackColor = Color.FromArgb(35, 55, 75);
+        panelInfoBar.Controls.Add(btnCopyPass);
         panelInfoBar.Controls.Add(lblPassword);
         panelInfoBar.Controls.Add(lblPasswordCaption);
+        panelInfoBar.Controls.Add(btnCopyId);
         panelInfoBar.Controls.Add(lblPartnerId);
         panelInfoBar.Controls.Add(lblPartnerIdCaption);
         panelInfoBar.Dock = DockStyle.Top;
@@ -203,8 +224,46 @@ partial class Form1
         lblPassword.Text = "----";
         lblPassword.TextAlign = ContentAlignment.MiddleLeft;
 
+        // ─── btnCopyId ───
+        btnCopyId.BackColor = Color.FromArgb(50, 70, 95);
+        btnCopyId.Cursor = Cursors.Hand;
+        btnCopyId.Dock = DockStyle.Left;
+        btnCopyId.FlatAppearance.BorderSize = 0;
+        btnCopyId.FlatStyle = FlatStyle.Flat;
+        btnCopyId.Font = new Font("Segoe UI", 9F);
+        btnCopyId.ForeColor = Color.FromArgb(180, 200, 220);
+        btnCopyId.Location = new Point(239, 8);
+        btnCopyId.Name = "btnCopyId";
+        btnCopyId.Size = new Size(32, 29);
+        btnCopyId.TabIndex = 10;
+        btnCopyId.Text = "📋";
+        btnCopyId.UseVisualStyleBackColor = false;
+        btnCopyId.Click += BtnCopyId_Click;
+
+        // ─── btnCopyPass ───
+        btnCopyPass.BackColor = Color.FromArgb(50, 70, 95);
+        btnCopyPass.Cursor = Cursors.Hand;
+        btnCopyPass.Dock = DockStyle.Left;
+        btnCopyPass.FlatAppearance.BorderSize = 0;
+        btnCopyPass.FlatStyle = FlatStyle.Flat;
+        btnCopyPass.Font = new Font("Segoe UI", 9F);
+        btnCopyPass.ForeColor = Color.FromArgb(180, 200, 220);
+        btnCopyPass.Location = new Point(420, 8);
+        btnCopyPass.Name = "btnCopyPass";
+        btnCopyPass.Size = new Size(32, 29);
+        btnCopyPass.TabIndex = 11;
+        btnCopyPass.Text = "📋";
+        btnCopyPass.UseVisualStyleBackColor = false;
+        btnCopyPass.Click += BtnCopyPass_Click;
+
+        // ─── toolTipCopy ───
+        toolTipCopy.AutoPopDelay = 2000;
+        toolTipCopy.InitialDelay = 0;
+        toolTipCopy.ReshowDelay = 100;
+
         // ─── panelTop ───
         panelTop.Controls.Add(lblFps);
+        panelTop.Controls.Add(btnChat);
         panelTop.Controls.Add(btnToggleStream);
         panelTop.Controls.Add(lblClients);
         panelTop.Controls.Add(btnStop);
@@ -276,6 +335,7 @@ partial class Form1
     private Button btnStart;
     private Button btnStop;
     private Button btnToggleStream;
+    private Button btnChat;
     private Label lblPartnerIdCaption;
     private Label lblPartnerId;
     private Label lblPasswordCaption;
@@ -286,4 +346,7 @@ partial class Form1
     private Label lblClients;
     private Panel panelTop;
     private Panel panelInfoBar;
+    private Button btnCopyId;
+    private Button btnCopyPass;
+    private ToolTip toolTipCopy;
 }

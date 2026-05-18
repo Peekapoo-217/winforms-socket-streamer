@@ -47,4 +47,13 @@ public static class PacketParser
         var parsed = Parse(rawPacket);
         return System.Text.Encoding.UTF8.GetString(parsed.Payload);
     }
+
+    /// <summary>
+    /// Convenience: parses the packet and deserializes the payload as a <see cref="ChatPacket"/>.
+    /// Only valid when <see cref="ParsedPacket.Type"/> is <see cref="DataType.Chat"/>.
+    /// </summary>
+    public static ChatPacket ParseChat(byte[] payload)
+    {
+        return ChatPacket.FromBytes(payload);
+    }
 }
